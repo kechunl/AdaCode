@@ -1,0 +1,140 @@
+# general settings
+name: AdaCode_stage1_category
+model_type: FeMaSRModel 
+scale: 4 # doesn't matter for this stage
+num_gpu: 4 # set num_gpu: 0 for cpu mode
+manual_seed: 0
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: General_Image_Train
+    type: BSRGANTrainDataset 
+    datafile_gt: ./data/category_data/train/portrait.txt
+    io_backend:
+      type: disk
+ 
+    gt_size: 256
+    use_resize_crop: true 
+    use_flip: true
+    use_rot: true
+
+    # data loader
+    use_shuffle: true
+    batch_size_per_gpu: &bsz 8 
+    num_worker_per_gpu: *bsz 
+    dataset_enlarge_ratio: 1
+
+    prefetch_mode: cpu
+    num_prefetch_queue: *bsz
+
+  val:
+    name: General_Image_Valid
+    type: PairedImageDataset
+    datafile_gt: ./data/category_data/valid/portrait.txt
+    datafile_lq: ./data/category_data/valid/portrait.txt
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: FeMaSRNet 
+  gt_resolution: 256
+  norm_type: 'gn'
+  act_type: 'silu'
+  use_semantic_loss: true
+  codebook_params: # has to order from low to high
+    - [32, 256, 256]
+
+  # for HQ stage training
+  LQ_stage: false 
+  use_quantize: true
+  
+network_d:
+  type: UNetDiscriminatorSN 
+  num_in_ch: 3
+
+# path
+path:
+  # pretrain_network_g: ./experiments/pretrained_models/QuanTexSR/pretrain_semantic_vqgan_net_g_latest.pth 
+  # pretrain_network_d: ~
+  # pretrain_network_g: ./experiments/004_FeMaSR_HQ_stage/models/net_g_best_.pth
+  # pretrain_network_d: ./experiments/004_FeMaSR_HQ_stage/models/net_d_best_.pth
+  strict_load: false 
+  # resume_state: ~
+
+# training settings
+train:
+  optim_g:
+    type: Adam
+    lr: !!float 1e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+  optim_d:
+    type: Adam
+    lr: !!float 4e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [1800, 3600, 5400, 7200, 9000, 10800, 12600]
+    gamma: 1
+
+  total_iter: 73500
+  warmup_iter: -1  # no warm up
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0 
+    reduction: mean
+
+  perceptual_opt:
+    type: LPIPSLoss
+    loss_weight: !!float 1.0 
+    
+  gan_opt:
+    type: GANLoss
+    gan_type: hinge
+    real_label_val: 1.0
+    fake_label_val: 0.0
+    loss_weight: 0.1
+
+  codebook_opt:
+    loss_weight: 1.0
+
+  semantic_opt:
+    loss_weight: 0.1 
+
+  net_d_iters: 1
+  net_d_init_iters: !!float 0 
+
+# validation settings·
+val:
+  val_freq: !!float 3e2 
+  save_img: false 
+
+  key_metric: lpips
+  metrics:
+    psnr: # metric name, not used in this codebase 
+      type: psnr 
+      crop_border: 4
+      test_y_channel: true
+      color_space: ycbcr
+    ssim:
+      type: ssim 
+      crop_border: 4
+      test_y_channel: true
+      color_space: ycbcr
+    lpips:
+      type: lpips 
+      better: lower
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 1e9
+  save_latest_freq: !!float 1e3
+  show_tf_imgs_freq: !!float 3e2
+  use_tb_logger: true
