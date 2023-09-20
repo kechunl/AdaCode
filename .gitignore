@@ -12,6 +12,7 @@ tmp*
 *.sh
 .vscode*
 .github
+*/.DS_Store
 
 # ignored files
 version.py

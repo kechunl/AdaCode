@@ -7,6 +7,8 @@ This repository provides the official implementation for the paper
 > In ICCV 2023.
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2306.06513)
+[![Website](https://img.shields.io/badge/website-link-blue.svg)](https://kechunl.github.io/AdaCode/)
+[![Video](https://img.shields.io/badge/video-red.svg)](https://www.youtube.com/watch?v=GOp-4kbgyoM)
 > **Abstract:** Recent work of discrete generative priors, in the form of codebooks, has shown exciting performance for image reconstruction and restoration, since the discrete prior space spanned by the codebooks increases the robustness against diverse image degradations. Nevertheless, these methods require separate training of codebooks for different image categories, which limits their use to specific image categories only (e.g. face, architecture, etc.), and fail to handle arbitrary natural images. **In this paper, we propose AdaCode for learning image-adaptive codebooks for classagnostic image restoration. Instead of learning a single codebook for all categories of images, we learn a set of basis codebooks. For a given input image, AdaCode learns a weight map with which we compute a weighted combination of these basis codebooks for adaptive image restoration.** Intuitively, AdaCode is a more flexible and expressive discrete generative prior than previous work. Experimental results show that AdaCode achieves state-of-the-art performance on image reconstruction and restoration tasks, including image super-resolution and inpainting.
 
 <img src="figures/teaser.jpeg" width = "960" height = ""  align=center />
