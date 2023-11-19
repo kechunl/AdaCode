@@ -14,6 +14,7 @@ import pyiqa
 
 from basicsr.utils import img2tensor, tensor2img, imwrite 
 from basicsr.archs.adacode_arch import AdaCodeSRNet
+from basicsr.archs.femasr_arch import FeMaSRNet 
 from basicsr.archs.adacode_contrast_arch import AdaCodeSRNet_Contrast
 from basicsr.utils.download_util import load_file_from_url 
 
@@ -40,7 +41,8 @@ def main(args):
         temp = k.tolist()
         temp.insert(0,32)
         codebook_dim_list.append(temp)
-    recon_model = AdaCodeSRNet_Contrast(codebook_params=codebook_dim_list, LQ_stage=False, AdaCode_stage=True, weight_softmax=False).to(device)
+    # recon_model = FeMaSRNet(codebook_params=[[32, 512, 256]], LQ_stage=False, scale_factor=2).to(device)
+    recon_model = AdaCodeSRNet_Contrast(codebook_params=codebook_dim_list, LQ_stage=False, AdaCode_stage=True, batch_size=2, weight_softmax=False).to(device)
     recon_model.load_state_dict(model_params, strict=False)
     recon_model.eval()
     
@@ -64,23 +66,18 @@ def main(args):
             max_size = args.max_size ** 2 
             h, w = img_HR_tensor.shape[2:]
             if h * w < max_size: 
-                output_HR = recon_model.test(img_HR_tensor, cat_map=args.catmap)
+                output_HR = recon_model.test(img_HR_tensor)
             else:
-                output_HR = recon_model.test_tile(img_HR_tensor, cat_map=args.catmap)
+                output_HR = recon_model.test_tile(img_HR_tensor)
 
-            if args.catmap:
-                weight_map = output_HR[1]
-                output = output_HR[0]
-            else:
-                output = output_HR[0]
+            output = output_HR[0]
             output_img = tensor2img(output)
 
-            # save_path = os.path.join(args.output, f'{img_name}')
-            # imwrite(output_img, save_path)
+            save_path = os.path.join(args.output, f'{img_name}')
+            imwrite(output_img, save_path)
 
             for name in metric_funcs.keys():
                 metric_results[name] += metric_funcs[name](img_HR_tensor, output.unsqueeze(0)).item()
-            # os.remove(save_path)
             pbar.update(1)
         except:
             print(path, ' fails.')
@@ -127,8 +124,6 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str, default='results', help='Output folder')
     parser.add_argument('--suffix', type=str, default='', help='Suffix of the restored image')
     parser.add_argument('--max_size', type=int, default=600000, help='Max image size for whole image inference, otherwise use tiled_test')
-    parser.add_argument('--catmap', action='store_true', help='visualize category map with absolute maximum')
     args = parser.parse_args()
 
-    args.input = './dataset/DIV2K_HR_sub/DIV2K_val_HR_sub'
     main(args)
