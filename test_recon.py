@@ -54,33 +54,37 @@ def main(args):
 
     pbar = tqdm(total=len(paths), unit='image')
     for idx, path in enumerate(paths):
-        try:
-            img_name = os.path.basename(path)
-            pbar.set_description(f'Test {img_name}')
+        # try:
+        img_name = os.path.basename(path)
+        pbar.set_description(f'Test {img_name}')
 
-            # recon
-            img_HR = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-            img_HR_tensor = img2tensor(img_HR).to(device) / 255.
-            img_HR_tensor = img_HR_tensor.unsqueeze(0)
+        # recon
+        img_HR = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        img_HR_tensor = img2tensor(img_HR).to(device) / 255.
+        img_HR_tensor = img_HR_tensor.unsqueeze(0)
 
-            max_size = args.max_size ** 2 
-            h, w = img_HR_tensor.shape[2:]
-            if h * w < max_size: 
-                output_HR = recon_model.test(img_HR_tensor)
-            else:
-                output_HR = recon_model.test_tile(img_HR_tensor)
+        max_size = args.max_size ** 2 
+        h, w = img_HR_tensor.shape[2:]
+        if h * w < max_size: 
+            output_HR = recon_model.test(img_HR_tensor, vis_weight=args.vis_weight)
+        else:
+            output_HR = recon_model.test_tile(img_HR_tensor, vis_weight=args.vis_weight)
 
+        if args.vis_weight:
+            weight_map = output_HR[1]
+            vis_weight(weight_map, os.path.join(args.output, 'weight_map', img_name))
             output = output_HR[0]
-            output_img = tensor2img(output)
+        else:
+            output = output_HR
+        output_img = tensor2img(output)
 
-            save_path = os.path.join(args.output, f'{img_name}')
-            imwrite(output_img, save_path)
+        imwrite(output_img, os.path.join(args.output, f'{img_name}'))
 
-            for name in metric_funcs.keys():
-                metric_results[name] += metric_funcs[name](img_HR_tensor, output.unsqueeze(0)).item()
-            pbar.update(1)
-        except:
-            print(path, ' fails.')
+        for name in metric_funcs.keys():
+            metric_results[name] += metric_funcs[name](img_HR_tensor, output).item()
+        pbar.update(1)
+        # except:
+        #     print(path, ' fails.')
     pbar.close()
 
     for name in metric_results.keys():
@@ -93,19 +97,17 @@ def vis_weight(weight, save_path):
     # weight: B x n x 1 x H x W
     weight = weight.cpu().numpy()
     # normalize weights
-    # norm_weight = (weight - weight.mean()) / weight.std() / 2
-    # norm_weight = np.abs(norm_weight)
-    norm_weight = weight
+    # norm_weight = weight
+    norm_weight = (weight - weight.mean()) / weight.std() / 2
+    norm_weight = np.abs(norm_weight)
     norm_weight *= 255
     norm_weight = np.clip(norm_weight, 0, 255)
-    # norm_weight += 127
     norm_weight = norm_weight.astype(np.uint8)
     # visualize
     display_grid = np.zeros((weight.shape[3], (weight.shape[4]+1)*weight.shape[1]-1))
     for img_id in range(len(norm_weight)):
         for c in range(norm_weight.shape[1]):
             display_grid[:, c*weight.shape[4]+c:(c+1)*weight.shape[4]+c] = norm_weight[img_id, c, 0, :, :]
-
             # weight_path = save_path.split('.')[0] + '_{}.png'.format(str(c))
             # Image.fromarray(norm_weight[img_id, c, 0, :, :]).save(weight_path)
     plt.figure(figsize=(30,150))
@@ -124,6 +126,10 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str, default='results', help='Output folder')
     parser.add_argument('--suffix', type=str, default='', help='Suffix of the restored image')
     parser.add_argument('--max_size', type=int, default=600000, help='Max image size for whole image inference, otherwise use tiled_test')
+    parser.add_argument('--vis_weight', action='store_true', help='visualize weight map')
     args = parser.parse_args()
+
+    if args.vis_weight:
+        os.makedirs(os.path.join(args.output, 'weight_map'), exist_ok=True)
 
     main(args)
