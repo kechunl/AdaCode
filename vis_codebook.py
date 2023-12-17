@@ -106,12 +106,14 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') 
     
     # set up the model
-    weight_path = './experiments/stage1/c0/net_g_best_512x256.pth'
-    vqgan = FeMaSRNet(codebook_params=[[32, 512, 256]], LQ_stage=False).to(device)
+    weight_path = './experiments/pretrained_models/S1_c2_512x256_net_g_best.pth'
+    codebook_size = os.path.basename(weight_path).split('_')[2].split('x')
+    vqgan = FeMaSRNet(codebook_params=[[32, int(codebook_size[0]), int(codebook_size[1])]], LQ_stage=False).to(device)
     vqgan.load_state_dict(torch.load(weight_path)['params'], strict=False)
     vqgan.eval()
 
-    vis_single_code(vqgan, 512, 'codebook_vis/c0_512.png')
+    os.makedirs('results/codebook_vis', exist_ok=True)
+    vis_single_code(vqgan, int(codebook_size[0]), 'results/codebook_vis/{}.png'.format(os.path.basename(weight_path).split('.')[0]))
     # vis_rand_single_code(vqgan, 256, 'codebook_vis/sample_ffhq.png', vis_num=10)
 
     # reconstruct_ost(vqgan, '../datasets/SR_OST_datasets/OutdoorSceneTrain_v2/', './tmp_code_vis/ost_rec', maxnum=1000) 

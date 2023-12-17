@@ -393,7 +393,7 @@ class AdaCodeSRNet_Contrast(nn.Module):
         return out_img
 
     @torch.no_grad()
-    def test_tile(self, input, tile_size=240, tile_pad=16):
+    def test_tile(self, input, tile_size=240, tile_pad=16, vis_weight=False):
         # return self.test(input)
         """It will first crop input images to tiles, and then process each tile.
         Finally, all the processed tiles are merged into one images.
@@ -406,6 +406,7 @@ class AdaCodeSRNet_Contrast(nn.Module):
 
         # start with black image
         output = input.new_zeros(output_shape)
+        weight_map = torch.zeros(batch, len(self.codebook_scale), 1, output_height, output_width)
         tiles_x = math.ceil(width / tile_size)
         tiles_y = math.ceil(height / tile_size)
 
@@ -434,7 +435,10 @@ class AdaCodeSRNet_Contrast(nn.Module):
                 input_tile = input[:, :, input_start_y_pad:input_end_y_pad, input_start_x_pad:input_end_x_pad]
 
                 # upscale tile
-                output_tile = self.test(input_tile)
+                if vis_weight:
+                    output_tile, weight_tile = self.test(input_tile, vis_weight=True)
+                else:
+                    output_tile = self.test(input_tile)
                 
                 # output tile area on total image
                 output_start_x = input_start_x * self.scale_factor
@@ -451,11 +455,15 @@ class AdaCodeSRNet_Contrast(nn.Module):
                 # put tile into output image
                 output[:, :, output_start_y:output_end_y,
                        output_start_x:output_end_x] = output_tile[:, :, output_start_y_tile:output_end_y_tile, output_start_x_tile:output_end_x_tile]
-
+                if vis_weight:
+                    weight_map[:, :, :, output_start_y:output_end_y, output_start_x:output_end_x] = weight_tile[:, :, :, output_start_y_tile:output_end_y_tile, output_start_x_tile:output_end_x_tile]
+        
+        if vis_weight:
+            return output, weight_map
         return output
 
     @torch.no_grad()
-    def test(self, input):
+    def test(self, input, vis_weight=False):
         org_use_semantic_loss = self.use_semantic_loss
         self.use_semantic_loss = False
 
@@ -474,6 +482,11 @@ class AdaCodeSRNet_Contrast(nn.Module):
 
         self.use_semantic_loss = org_use_semantic_loss 
 
+        if vis_weight:
+            weight = aux['weight']
+            weight = F.pixel_shuffle(weight.repeat(1,1,64,1,1), 8)
+            weight = weight[..., :h_old * self.scale_factor, :w_old * self.scale_factor]
+            return output, weight
         return output
 
     def forward(self, input, gt_aux=None):

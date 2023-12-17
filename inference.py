@@ -30,8 +30,12 @@ def main():
     parser.add_argument('-s', '--out_scale', type=int, default=4, help='final upsampling scale of the image for SR task')
     parser.add_argument('--suffix', type=str, default='', help='Suffix of the restored image')
     parser.add_argument('--max_size', type=int, default=600, help='Max image size for whole image inference, otherwise use tiled_test')
+    parser.add_argument('--vis_weight', action='store_true', help='visualize weight map')
     args = parser.parse_args()
 
+    if args.vis_weight:
+        os.makedirs(os.path.join(args.output, 'weight_map'), exist_ok=True)
+        
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') 
 
     if args.task == 'sr':
@@ -80,10 +84,14 @@ def main():
             max_size = args.max_size ** 2 
             h, w = img_tensor.shape[2:]
             if h * w < max_size: 
-                output = model.test(img_tensor)
+                output = model.test(img_tensor, vis_weight=args.vis_weight)
             else:
-                output = model.test_tile(img_tensor)
+                output = model.test_tile(img_tensor, vis_weight=args.vis_weight)
 
+            if args.vis_weight:
+                weight_map = output[1]
+                vis_weight(weight_map, os.path.join(args.output, 'weight_map', img_name))
+                output = output[0]
             output_img = tensor2img(output)
 
             save_path = os.path.join(args.output, f'{img_name}')
@@ -93,6 +101,28 @@ def main():
             print(path, ' fails.')
     pbar.close()
 
+def vis_weight(weight, save_path):
+    # weight: B x n x 1 x H x W
+    weight = weight.cpu().numpy()
+    # normalize weights
+    # norm_weight = weight
+    norm_weight = (weight - weight.mean()) / weight.std() / 2
+    norm_weight = np.abs(norm_weight)
+    norm_weight *= 255
+    norm_weight = np.clip(norm_weight, 0, 255)
+    norm_weight = norm_weight.astype(np.uint8)
+    # visualize
+    display_grid = np.zeros((weight.shape[3], (weight.shape[4]+1)*weight.shape[1]-1))
+    for img_id in range(len(norm_weight)):
+        for c in range(norm_weight.shape[1]):
+            display_grid[:, c*weight.shape[4]+c:(c+1)*weight.shape[4]+c] = norm_weight[img_id, c, 0, :, :]
+            # weight_path = save_path.split('.')[0] + '_{}.png'.format(str(c))
+            # Image.fromarray(norm_weight[img_id, c, 0, :, :]).save(weight_path)
+    plt.figure(figsize=(30,150))
+    plt.axis('off')
+    plt.imshow(display_grid)
+    plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
+    plt.close()
 
 if __name__ == '__main__':
     main()
